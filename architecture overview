@@ -1,0 +1,99 @@
+# Project 1: Cloud-Based Active Directory & Identity Lab (Samba AD)
+
+## Architecture Overview
+
+This project deploys an enterprise-grade Active Directory Domain Controller within a secure, isolated cloud environment. By running Samba AD on an Ubuntu instance, we simulate an on-premise IT directory service infrastructure inside Google Cloud Platform.
+
+```
+┌──────────────────────────────────────┐       ┌──────────────────────────────────────┐
+│        Ubuntu 22.04 LTS Server       │       │         Client Workstation           │
+│        (samba-ad-server)             │◄─────►│         (Domain Member)              │
+│  IP: 10.128.0.3                      │  TCP  │  - Kerberos Authentication           │
+│  Hostname: samba-ad.corp.local       │  DNS  │  - Domain User Logins                │
+└──────────────────────────────────────┘       └──────────────────────────────────────┘
+
+```
+
+---
+
+## Infrastructure & Configuration Steps
+
+### Step 1: Provisioning & Static Networking
+
+* **Compute Engine Instance:** Created `samba-ad-server` using an `e2-micro` machine type (Always Free tier) with an Ubuntu 22.04 LTS 30 GB boot disk.
+
+
+* **Static IP Reservation:** Reserved internal IP address `10.128.0.3` via the VPC Network console and bound it to prevent lease renewal changes that would break client domain trust relationships.
+
+
+
+### Step 2: Hostname & Local Resolution
+
+* **System Hostname:** Set the persistent hostname to `samba-ad` via `/etc/hostname`.
+
+
+* **Hosts Mapping:** Appended the local loopback and static IP routing entry to `/etc/hosts`:
+
+
+```text
+10.128.0.3 samba-ad.corp.local samba-ad
+
+```
+
+
+* **Kernel Update:** Applied immediate hostname recognition using `sudo hostnamectl set-hostname samba-ad`.
+
+
+
+### Step 3: Directory Services Installation
+
+* **Package Deployment:** Installed core identity and directory packages:
+
+
+```bash
+sudo apt update && sudo apt install -y samba krb5-user winbind smbclient
+
+```
+
+
+* **Service Purging:** Disabled default Ubuntu file-sharing daemons to avoid port collisions with the Active Directory controller:
+
+
+```bash
+sudo systemctl stop smbd nmbd winbind
+sudo systemctl disable smbd nmbd winbind
+
+```
+
+
+
+### Step 4: Provisioning & Domain Security
+
+* **Interactive Domain Provisioning:** Initialized the Active Directory structure for realm `CORP.LOCAL`:
+
+
+```bash
+sudo samba-tool domain provision --use-rfc2307 --interactive
+
+```
+
+
+*(Configured with `CORP` NetBIOS domain, internal DNS backend `SAMBA_INTERNAL`, and disabled external DNS forwarders `none`).*
+* **Kerberos Integration:** Copied the generated cryptographic ticket configuration file into system paths:
+
+
+```bash
+sudo cp /var/lib/samba/private/krb5.conf /etc/krb5.conf
+
+```
+
+
+* **Service Activation:** Enabled and started the primary domain controller daemon:
+
+
+```bash
+sudo systemctl unmask samba-ad-dc
+sudo systemctl enable samba-ad-dc
+sudo systemctl start samba-ad-dc
+
+```
